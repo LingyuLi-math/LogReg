@@ -53,3 +53,9 @@ R code for five **RFE** feature selection methods.
 * (9)"class_feature_clear.R" ---- SVM: Perform independent data set verification and draw ROC curve.
 * (10) "cluster_clear.R" ---- SVM: Enrichment analysis of identified biomarkers.
 <!--END_SECTION:news-->
+
+
+## Another Website
+<!--START_SECTION:news-->
+This **LogReg** R code is the same as the one in our [Lab's Website](https://github.com/zpliulab/LogReg)
+<!--END_SECTION:news-->
