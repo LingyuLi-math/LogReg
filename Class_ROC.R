@@ -9,8 +9,9 @@ library(pROC)
 
 
 ## load data
-Data  = read.table("D:\\E\\博士\\R_程序\\GSE59491_15\\Data\\GSE73685_17.txt", header = T, check.names = FALSE)
-Data2 = read.table("D:\\E\\博士\\R_程序\\GSE59491_15\\Data\\GSE59491_17.txt", header = T, check.names = FALSE)
+setwd("D:\\E\\博士\\R_程序\\GSE59491_15")
+Data  = read.table("Data\\GSE73685_17.txt", header = T, check.names = FALSE)
+Data2 = read.table("Data\\GSE59491_17.txt", header = T, check.names = FALSE)
 
 
 # split data -------------------------------------------------------------------
@@ -26,7 +27,6 @@ glm.fit <- glm(y.train~., data = x.train, family = binomial)
 summary(glm.fit)
 
 
-setwd("D:\\E\\博士\\R_程序\\GSE59491_15\\Data37\\DE")
 # train --------------------------------------------------------------------
 p_train <- predict(glm.fit, x.train, type = "response")
 p_train = as.matrix(p_train)
@@ -42,14 +42,14 @@ colnames(pred_glm) <- c('y.test', 'Lable')
 p <- pred_glm[,1]
 p_glm <- cbind(log(p/(1-p)), pred_glm[,2])
 colnames(p_glm) <- c('y.test', 'Lable')
-# write.table(p_glm,"pre59491_46510_7cvlog_zf_new.txt",quote=F,sep="\t")  # 2020.6.30
+# write.table(p_glm,"Data37\\DE\\pre59491_46510_7cvlog_zf_new.txt",quote=F,sep="\t")  # 2020.6.30
 
 
 library(pROC)
 p_test = as.matrix(p_test)
 A_test <- data.frame(p_test, y.test)
 names(A_test)<- c("p", "outcome")
-# pdf(file = "pAUC_test_glm_cv20_zf_new.pdf",width = 4,height = 4)  # 2020.6.29后
+# pdf(file = "Data37\\DE\\pAUC_test_glm_cv20_zf_new.pdf",width = 4,height = 4)  # 2020.6.29后
 plot.roc(A_test$outcome, A_test$p, print.auc=T)
 # plot.roc(A_test$outcome, A_test$p)
 # legend("bottomright", legend=c("Acc = 0.941", "Pre = 1.000 ", "Sn = 0.800", "F-measure = 0.889", "Sp = 1.000", "AUC = 0.933"))

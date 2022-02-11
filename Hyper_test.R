@@ -1,36 +1,15 @@
 library(tidyverse)
 library(plyr)
 library(stargazer) #转换latex 
-# 学习 https://blog.csdn.net/linkequa/article/details/86491665 --------------
-
-# fisher.test(matrix(c(2,614,176,17002),nrow = 2), alternative = "less")
-# > p-value = 0.05143
-# phyper(2,178,17618,616, lower.tail=T)
-# > p-value = 0.05145337
-# fisher.test(matrix(c(2,614,176,17002),nrow = 2), alternative = "great")
-# p-value = 0.9864
-# phyper(2-1,178,17618,616, lower.tail=F)
-# Pvalue =  0.986356
-# lower.tail logical; if TRUE (default), probabilities are P[X ≤ x], otherwise, P[X > x].
-# 仅在 lower.tail=F ,做enrichment时取q-1. (相比仅以q计算, 这个P值实际要略微大点) 
-# 但lower.tail=T时, 如果是做depletion(选择接受假设), 此时取q-1, 结果实际上少算了一个值. 
-# (实际要算的是P[X ≤ x],但如果q取q-1, 结果就成了P[X ＜ x]的情况, 将当前观测的P值给排除了,所得的P值要偏小)
 
 
 # 计算超几何分布检验 ---------------------------------------------------------------
 
-## 初始化
-## 例子
-# N <- 20000
-# M <- 2005  
-# n <- 805
-# k <- 265
 ## 真实
 N <- 359  # 总数
 M <- 359  # 方法一
 n <- 67   # 方法二
 k <- 67   # overlap
-
 
 # my_phyper 函数 ---------------------------------------------------------------
 
@@ -109,8 +88,8 @@ result[i+4,6] <- signif(p_bm, digits = 3)
 
 result[i+5,6] <- signif(p_sm, digits = 3)
 
-setwd("D:\\E\\博士\\R_程序\\GSE59491_15\\Data37\\result")
-result %>% write.csv(file = "phyper.csv") 
+setwd("D:\\E\\博士\\R_程序\\GSE59491_15")
+# result %>% write.csv(file = "Data37\\result\\phyper.csv") 
 
 # 表格 ----------------------------------------------------------------------
 stargazer(result) 
