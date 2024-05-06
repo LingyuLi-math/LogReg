@@ -13,44 +13,44 @@ library(fdrtool)
 
 
 ## load data
-setwd("D:\\E\\²©Ê¿\\R_³ÌĞò\\GSE59491_15")
+setwd(".\\GSE59491_15")
 expSet <- read.table("Data/GSE59491_series_matrix.txt", header=T, sep='\t', fill=TRUE, strip.white = T)
-expSet$ID_REF <- as.character(expSet$ID_REF)  # ½«ID_REFÁĞÈ«²¿×ª»»³É·ûºÅ,ÎªÁËÍ¬anno2ºÏ²¢
+expSet$ID_REF <- as.character(expSet$ID_REF)  # Convert all ID_REF columns into symbols, and merge with anno2
 
 
 ## load annotation
-anno <- read.table("Data/GPL18964.txt",header=T,sep='\t',fill=TRUE,strip.white = T,quote = "")  # Ì½ÕëºÍ»ùÒòIDµÄ¶ÔÓ¦ÎÄ¼ş
-anno2 <- anno[,c('ID','ENTREZ_GENE_ID')]     # ÌáÈ¡ÕâÁ½ÁĞ±êÇ©
-colnames(anno2) <- c('ID_REF','EntrezID')    # ½«ÕâÁ½ÁĞµÄ±êÇ©Ìæ»», 'GeneSymbol''Gene.Symbol'
-anno2$ID_REF <- as.character(anno2$ID_REF)   # ½«ID_REFÁĞÈ«²¿×ª»»³É·ûºÅ,ÎªÁËÍ¬expSetºÏ²¢
+anno <- read.table("Data/GPL18964.txt",header=T,sep='\t',fill=TRUE,strip.white = T,quote = "")  # æ¢é’ˆå’ŒåŸºå› IDçš„å¯¹åº”æ–‡ä»¶
+anno2 <- anno[,c('ID','ENTREZ_GENE_ID')]     # Extract these two columns of labels
+colnames(anno2) <- c('ID_REF','EntrezID')    # Replace these two columns's labels, with 'GeneSymbol''Gene.Symbol'
+anno2$ID_REF <- as.character(anno2$ID_REF)   # ConvertID_REF columns to symbols, in order to merge with expSet
 
 
-## ½«»ùÒò±í´ïÊı¾İÓëĞ¾Æ¬×¢ÊÍÎÄ¼şµÄÌ½ÕëÃû½øĞĞ¶ÔÓ¦
-expset2 <- expSet %>%                      # £¥>£¥À´×Ôdplyr°üµÄ¹ÜµÀº¯Êı£¬
-  inner_join(anno2,by='ID_REF') %>%        # ×÷ÓÃÊÇ½«Ç°Ò»²½µÄ½á¹ûÖ±½Ó´«²Î¸øÏÂÒ»²½µÄº¯Êı£¬Ê¡ÂÔÖĞ¼äµÄ¸³Öµ²½Öè
-  select(ID_REF,EntrezID, everything())    # %>%# ÖØĞÂÅÅÁĞ
-# View(expset2[,1:3])                      # expset2 Óë expset Ïà±È£¬µÚ2ÁĞ¶àÁË»ùÒòºÅ
+## Correspond gene expression data to probe names (in chip annotation files)
+expset2 <- expSet %>%                      # ï¼…>ï¼…, pipe function from dplyr package,
+  inner_join(anno2,by='ID_REF') %>%        # Directly pass result of previous step to the function of next step, omitting intermediate step.
+  select(ID_REF,EntrezID, everything())    # Rearrange
+# View(expset2[,1:3])                      # Compared with expset, expset2 has an extra gene number in column 2
 
 
-## ÕûÀíĞ¾Æ¬×¢ÊÍÎÄ¼ş£¬°ÑÆäÖĞÒ»¸öÌ½Õë¶ÔÓ¦¶à¸ö»ùÒòµÄ²ğ·Ö¿ª
+## Organize the chip annotation files and separate the multiple genes corresponding to one probe.
 expset3 <- expset2
-a <- tibble(expset3[,1:2])                 # °ÑµÚ 1 ºÍµÚ 2 ÁĞÌáÈ¡³öÀ´£¬·ÅÔÚ a ÖĞ  
+a <- tibble(expset3[,1:2])                 # Extract columns 1 and 2 and put them in â€˜aâ€™
 test1 <- apply(a,1, function(x){
-  str_split(x[2], '///', simplify=T)       # °Ñ a µÄµÚ2ÁĞÌáÈ¡³ö£¬¸øtest1
+  str_split(x[2], '///', simplify=T)       # Extract columns 2 of â€˜aâ€™ and give it to test1
 } )
 
 
-test2 <- apply(a, 1, function(x){          # ½«Ì½ÕëºÅºÍ»ùÒòºÅ£¬½øĞĞ---µÄÁ´½Ó
+test2 <- apply(a, 1, function(x){          # Link the probe number and gene number with â€˜---â€™
   paste(x[1],str_split(x[2], '///', simplify=T), sep = "---")
 })
 
 
-unlist(test2)                              # ½« list Êı¾İ±ä³É×Ö·û´®ÏòÁ¿»òÕßÊı×ÖÏòÁ¿µÄĞÎÊ½
-x <- tibble(unlist(test2))                 # tibble£¬È¡´ú´«Í³data.frame£¬¶ÁÈ¡²¢×Ô¶¯Ìí¼ÓÁĞÃû£ºunlist(test2)
-colnames(x) <- "lala"                      # ¸Ä±ä x µÄÁĞÃû£º½« unlist(test2) ¶¨ÒåÎª lala
-x2 <- separate(x,lala,c("id","entrezID"),sep = '---')     # Ê¶±ğ lala ÖĞµÄ ---£¬½«Êı¾İ·ÖÀë£¬µ¥¶À³ÉÁĞ²¢¸½ĞÂ±êÇ©
-x3 <- merge(x2,expset3,by.x = "id", by.y="ID_REF", all=FALSE)  #  ½«Á½¸öÎÄ¼ş°´Ë³ĞòºÏ²¢ÎªÒ»¸ö£¬
-x4<-x3[,-c(1,3)]                           # ½« µÚ1 ºÍµÚ3 Á½ÁĞÉ¾³ı, Ê£ÏÂµÄÊı¾İ»¹ÊÇ×Ö·ûĞÍµÄ£¬´ø×Å¡° "
+unlist(test2)                              # Convert list data into a string vector or numeric vector
+x <- tibble(unlist(test2))                 # tibbleï¼Œreplaces traditional data.frame, reads and automatically adds column names: unlist(test2)
+colnames(x) <- "lala"                      # Change the column name of x: define unlist(test2) as lala
+x2 <- separate(x,lala,c("id","entrezID"),sep = '---')     # Identify '---' in 'lala', separate the data into separate columns and attach new labels
+x3 <- merge(x2,expset3,by.x = "id", by.y="ID_REF", all=FALSE)  # Merge two files into one sequentially
+x4<-x3[,-c(1,3)]                           # Delete the 1st and 3rd columns, and the remaining data is still in character type, with ""
 zz <- as.matrix(apply(as.matrix(x4[,1]),1,function(x) as.numeric(x)))
 XX <- x4[,-1]
 colnames(XX)[1:3]
@@ -58,25 +58,26 @@ XX1 <- cbind(zz,XX)
 colnames(XX1) <- c("entrezID",colnames(XX))
 
 
-## ÓÃ»ùÒòid¶ÔÕûÀíºÃµÄĞ¾Æ¬×¢ÊÍÎÄ¼ş½øĞĞ»ùÒòÃûµÄ¸üĞÂ
+## Use the gene ID to update the gene name of the organized chip annotation file
 homo<-read.table("Data/homo.txt",header=T,sep='\t')
 x5 <- merge(homo, XX1, by.x="GeneID", by.y = "entrezID", all=FALSE) 
-# ºÏ²¢£¬ x5 ´Ó25088£¬½µÎª24478£¬»ùÒòºÅÓë»ùÒòÃû½øĞĞÆ¥Åä
+## x5 is reduced from 25088 to 24478, and the gene number is matched with the gene name.
 
 
-## Ì½ÕëÃûÆ¥Åä»ùÒòÃû£¬È¡³ö¶à¸öÌ½Õë¶ÔÓ¦Ò»¸ö»ùÒòµÄÊı¾İ¼ÆËãIQR£¬±£ÁôIQR×î´óµÄÌ½ÕëÊı¾İ
+## Probe name matches gene name: taken out the data (that multiple probes corresponding to one gene)
+## Calculate the IQR, and the probe data with the largest IQR is retained.
 expset4 <- x5 %>% 
-  dplyr::select(-GeneID) %>%              # È¥µô¶àÓàĞÅÏ¢
-  mutate(rowIQR =apply(.[,-1],1,IQR)) %>% # ¼ÆËãÃ¿ĞĞµÄIQR
-  arrange(desc(rowIQR)) %>%               # °Ñ±í´ïÁ¿µÄÆ½¾ùÖµ°´´Ó´óµ½Ğ¡ÅÅĞò
-  distinct(Symbol,.keep_all = T) %>%      # symbolÁôÏÂµÚÒ»¸ö
-  dplyr::select(-rowIQR)   %>%            # ·´ÏòÑ¡ÔñÈ¥³ırowIQRÕâÒ»ÁĞ
-  tibble::column_to_rownames(colnames(.)[1]) # °ÑµÚÒ»ÁĞ±ä³ÉĞĞÃû²¢É¾³ı
+  dplyr::select(-GeneID) %>%              # Remove redundant information
+  mutate(rowIQR =apply(.[,-1],1,IQR)) %>% # Calculate the IQR of each row
+  arrange(desc(rowIQR)) %>%               # Sort the average expression values from largest to smallest
+  distinct(Symbol,.keep_all = T) %>%      # symbol, leaves the first one
+  dplyr::select(-rowIQR)   %>%            # Reverse selection to remove rowIQR column
+  tibble::column_to_rownames(colnames(.)[1]) # Reverse selection to remove rowIQR column...
 View(expset4[1:10,1:10])
 dim(expset4)    # 24478   326
-  
 
-# ±êÇ© ----------------------------------------------------------------------
+
+## Label  ----------------------------------------------------------------------
 lable2 = read.csv("Data/GSE59491_all.csv", header = T, sep=',')
 dim(lable2)    # 326   2
 data = rbind(as.matrix(t(lable2[,2])), as.matrix(expset4))
