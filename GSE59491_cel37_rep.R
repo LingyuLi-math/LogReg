@@ -1,10 +1,11 @@
 ##  clear
 rm(list = ls())
 
-
-############################# ÏÂÔØ R °ü #############################
+################################################################################
+# Download R package 
+################################################################################
 library(tidyverse)
-library(caret)   # Ê®ÕÛ½»²æÑéÖ¤     
+library(caret)        # ten-fold cross-validation 
 library(glmnet)
 library("l0ara")
 library(ggplot2)
@@ -14,8 +15,8 @@ library(ROCR)
 library(pROC)
 library(glmnetUtils)
 library(ncpen)
-library(stargazer) #×ª»»latex 
-library(broom) #»Ø¹é½á¹û±£´æ
+library(stargazer)    # transfer into latex 
+library(broom)        # save regression results
 library(ncvreg)
 library("l0ara")
 # install.packages("caret")
@@ -23,28 +24,31 @@ library(plyr)
 library(pROC)
 
 
-############################# ¶ÁÈëÊı¾İ  #############################
-
-x = read.table("D:\\E\\²©Ê¿\\R_³ÌĞò\\GSE59491_15\\Data\\GSE59491_scale_DE.txt", header = T, check.names = FALSE)
+################################################################################
+# Load data  
+################################################################################
+x = read.table(".\\GSE59491_15\\Data\\GSE59491_scale_DE.txt", header = T, check.names = FALSE)
 data <- data.frame(t(x))
 
 
-## Data split ¡ª¡ª training data + testing data
+## Data split: training data + testing data
 set.seed(1234)
 training.samples <- data$Lable %>% createDataPartition(p = 0.7, list = FALSE)
 train.data  <- data[training.samples, ]
 test.data <- data[-training.samples, ]
 
 
-x <- model.matrix(Lable ~., train.data)[,-1]   # É¾³ıÁËLable~.
-y <- train.data$Lable # y <- ifelse(train.data$Lable == "1", 1, 0)
+x <- model.matrix(Lable ~., train.data)[,-1]   # delete Lable
+y <- train.data$Lable                          
 x.test <- model.matrix(Lable ~., test.data)[,-1] 
 y.test <- test.data$Lable
 # sum(y == 0)
 
 
-# pathways ----------------------------------------------------------------
-setwd("D:\\E\\²©Ê¿\\R_³ÌĞò\\GSE59491_15\\Data37")
+################################################################################
+# pathways 
+################################################################################
+setwd(".\\GSE59491_15\\Data37")
 set.seed(123)
 
 ridge.fit <- glmnet(x, y, family="binomial", alpha = 0, lambda = NULL) 
@@ -102,14 +106,14 @@ dev.off()
 l0.fit <- l0ara(x, y, family = "logit", 0.4)
 jpeg(file = "l0_fit.jpg")
 # postscript("l0_fit.eps")
-plot(l0.fit, auc = F, split = F, col = 4) # Ãè»æ ½â Â·¾¶µÄ·Ç¾Ö²¿Í¹ÆğµÄÇøÓò
+plot(l0.fit, auc = F, split = F, col = 4) # Non-locally convex regions of solution path
 dev.off()
 
 
 
-## X, y 
-X <- model.matrix(Lable ~., train.data)[,-1]   # É¾³ıÁËLable~.
-y <- train.data$Lable # y <- ifelse(train.data$Lable == "1", 1, 0)
+## using 'X', 'y', not 'x', 'y' 
+X <- model.matrix(Lable ~., train.data)[,-1]   # delete Lable
+y <- train.data$Lable                          
 x.test <- model.matrix(Lable ~., test.data)[,-1] 
 y.test <- test.data$Lable
 
@@ -135,47 +139,50 @@ jpeg(file = "MCP_fit.jpg")
 plot(MCP.fit)
 dev.off()
 
-############################ glmnet Ä£Äâ Ridge ³Í·£ ##########################
-## ´æ´¢Ô¤²â½á¹û
-coef_ridge <- matrix()       # ´æ´¢ÏµÊı½á¹û
-pred_ridge <- matrix()   # ´æ´¢Ô¤²â½á¹û
+
+################################################################################
+# glmnet: Ridge penalty 
+################################################################################
+## save prediction results
+coef_ridge <- matrix()       # save coefficients
+pred_ridge <- matrix()       # save prediction
 
 
 for(i in 1:30){
   
-  ## ÉèÖÃÖÖ×Ó
+  ## set seeds
   set.seed(i)
   
-  ## ½»²æÑéÖ¤£¬µÃµ½Ä£ĞÍ²ÎÊı
+  ## Cross-validation to obtain model parameters
   cv.ridge = cv.glmnet(x, y, alpha = 0, family = "binomial", nfolds = 10, type.measure = "class")
   lambda.min <- cv.ridge$lambda.min
   lambda.1se <- cv.ridge$lambda.1se
-  print("***lambda.min¡¢lambda.1se***")
+  print("***lambda.minã€lambda.1se***")
   print(lambda.min)
   print(lambda.1se)
   
-  ## ÄâºÏ
+  ## fit
   ridge.model <- glmnet(x, y, alpha = 0, family = "binomial", lambda = cv.ridge$lambda.1se)
   coef <- as.matrix(coef(ridge.model))
-  tcross <- rep(i, length(coef))              # iÊÇµÚ¼¸´ÎÑ­»·½»²æ£¬¹²K´Î
+  tcross <- rep(i, length(coef))                # i is the number of times the cycle crosses, totally K times.
   step_ridge <- data.frame(cbind(coef, tcross))
-  coef_ridge <- cbind(coef_ridge, step_ridge)   #temp°´ĞĞºÍpredºÏ²¢
+  coef_ridge <- cbind(coef_ridge, step_ridge)   # temp is merged with pred by row
   
-  ## Ô¤²â
+  ## predict
   p <- predict(ridge.model, newx = x.test, type = "response")
   kcross <- rep(i, length(p)) 
   temp_ridge <- data.frame(cbind(y.test, p, kcross))
-  pred_ridge <- cbind(pred_ridge,temp_ridge)   #temp°´ĞĞºÍpredºÏ²¢
+  pred_ridge <- cbind(pred_ridge,temp_ridge)    # temp is merged with pred by row
   
-  print(paste("µÚ£º",i)) 
+  print(paste("Theï¼š",i)) 
 }
 
-## ÉèÖÃ´æ´¢Â·¾¶
-setwd("D:\\E\\²©Ê¿\\R_³ÌĞò\\GSE59491_15\\Data37")
+## set save oathway
+setwd(".\\GSE59491_15\\Data37")
 # write.csv(coef_ridge, file = "ridge\\coef_ridge.csv")
 # write.csv(pred_ridge, file = "ridge\\pred_ridge.csv")
 
-# my_pred º¯Êı ÊäÈëp_ridge
+## define 'my_pred' function, Input: p_ridge
 my_pred <- function(x){
   p_ridge1 <- x[,-2]
   p_ridge2 <- matrix(data=0, nrow = dim(p_ridge1)[1], ncol = 1, byrow = FALSE, dimnames=list(c(as.character(x[,1])),c("prob")))
@@ -187,7 +194,7 @@ my_pred <- function(x){
 }
 
 
-# compute average
+## compute average 
 p_ridge <- read.table("ridge\\pred_ridge.csv", header=TRUE, sep = ',')
 pred_ridge <- cbind(y.test,my_pred(p_ridge))
 # write.csv(pred_ridge, file = "ridge\\pred_ridge0.csv")
@@ -197,32 +204,32 @@ pred_ridge <- cbind(y.test,my_pred(p_ridge))
 plot.roc(pred_ridge[,1], pred_ridge[,2], print.auc=T, main="pAUC")
 # dev.off()
 
-## ĞÔÄÜÖ¸±ê
+## Performance index
 predict = ifelse(pred_ridge[,2] > 0.5, 1, 0)
 predict_value = predict 
 true_value = pred_ridge[,1]
 error = predict_value-true_value
 
-# ¼ÆËãÄ£ĞÍ×¼È·ĞÔ£¨accuracy£©¡¢¾«È·¶È£¨Precision£©£¬ÕÙ»ØÂÊ£¨Recall£©-- Ãô¸ĞĞÔ£¨sensitivity£©-- ÕæÑôĞÔÂÊ£¨TPR£©ºÍ F²â¶È£¨F-measure£©ºÍ»ìÏı¾ØÕó
-# Precision¼ÆËãµÄÊÇËùÓĞ±»¼ìË÷µ½µÄitem£¨TP+FP£©ÖĞ,"Ó¦¸Ã±»¼ìË÷µ½µÄitem£¨TP£©¡±Õ¼µÄ±ÈÀı£»
-# Recall¼ÆËãµÄÊÇËùÓĞ¼ìË÷µ½µÄitem£¨TP£©Õ¼ËùÓĞ"Ó¦¸Ã±»¼ìË÷µ½µÄitem£¨TP+FN£©"µÄ±ÈÀı
-# Ò»°ãÀ´Ëµ£¬Precision¾ÍÊÇ¼ìË÷³öÀ´µÄÌõÄ¿£¨±ÈÈç£ºÎÄµµ¡¢ÍøÒ³µÈ£©ÓĞ¶àÉÙÊÇ×¼È·µÄ£¬Recall¾ÍÊÇËùÓĞ×¼È·µÄÌõÄ¿ÓĞ¶àÉÙ±»¼ìË÷³öÀ´ÁË
+## Calculate model accuracy, precision, recall rate (Recall), sensitivity, true positive rate (TPR), F-measure and confusion matrix.
+## 'Precision' calculates the proportion of "items that should be retrieved (TP)" among all retrieved items (TP+FP);
+## 'Recall' calculates the ratio of all retrieved items (TP) to all "items that should be retrieved (TP+FN)"
+## 'Precision' is how many of the retrieved items are accurate. 'Recall' is how many of all accurate items have been retrieved.
 accuracy = (nrow(data)-sum(abs(error)))/nrow(data) 
-precision = sum(true_value & predict_value)/sum(predict_value)  #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / Ô¤²âÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı/ÌáÈ¡³öµÄĞÅÏ¢ÌõÊı
-recall = sum(predict_value & true_value)/sum(true_value)        #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / ÕæÊµÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı /Ñù±¾ÖĞµÄĞÅÏ¢ÌõÊı
-# PºÍRÖ¸±êÓĞÊ±ºò»á³öÏÖµÄÃ¬¶ÜµÄÇé¿ö£¬ÕâÑù¾ÍĞèÒª×ÛºÏ¿¼ÂÇËûÃÇ£¬×î³£¼ûµÄ·½·¨¾ÍÊÇF-Measure£¨ÓÖ³ÆÎªF-Score£©
-F_measure= 2*precision*recall/(precision+recall)    #F-MeasureÊÇPrecisionºÍRecall¼ÓÈ¨µ÷ºÍÆ½¾ù£¬ÊÇÒ»¸ö×ÛºÏÆÀ¼ÛÖ¸±ê
+precision = sum(true_value & predict_value)/sum(predict_value)  # The true value and predicted value are all 1, and the predicted value is all 1.
+recall = sum(predict_value & true_value)/sum(true_value)        # The true value and the predicted value are all 1 / the true value is all 1.
+## 'precision' and 'recall' sometimes appear to be contradictory, so need to be considered comprehensively. The most common method is 'F-measure'.
+F_measure= 2*precision*recall/(precision+recall)                # 'F-measure' is the weighted harmonic average of 'Precision' and 'Recall'.
 specificity = ((nrow(data)-sum(abs(error)))-sum(predict_value & true_value))/(nrow(data)-sum(true_value)) 
-# AUC
+### AUC
 pred <- prediction(pred_ridge[,2], pred_ridge[,1])
 auc <- performance(pred,'auc')
 auc <- unlist(slot(auc,'y.values'))
 
-## »ìÏı¾ØÕó£¬ÏÔÊ¾½á¹ûÒÀ´ÎÎªTP¡¢FN¡¢FP¡¢TN
+## save Confusion matrix
 # table(true_value, predict_value) %>% as.matrix(table) %>% write.csv(file = "ridge\\table.csv")     
 
 
-## Êä³ö½á¹û
+## Output results
 result <- matrix(0, 7, 6)
 colnames(result) <- c("accuracy", "precision", "recall", "F_measure", "specificity", "AUC")
 rownames(result) <- c("ridge", "lasso", "elatic net", "L1/2", "L0", "SCAD", "MCP")
@@ -237,45 +244,47 @@ result[i,6] <- auc
 # result %>% write.csv(file = "result\\result.csv") 
 
 
-######################### glmnet Ä£Äâ Lasso ³Í·£ #############################
-## ´æ´¢Ô¤²â½á¹û
-coef_lasso <- matrix()       # ´æ´¢ÏµÊı½á¹û
-pred_lasso <- matrix()   # ´æ´¢Ô¤²â½á¹û
+################################################################################
+# glmnet: Lasso penalty
+################################################################################
+## save prediction results
+coef_lasso <- matrix()       # save coefficients
+pred_lasso <- matrix()       # save prediction
 
 for(i in 1:30){
   
-  ## ÉèÖÃÖÖ×Ó
+  ## set seeds
   set.seed(i)
   
-  ## ½»²æÑéÖ¤£¬µÃµ½Ä£ĞÍ²ÎÊı
+  ## Cross-validation to obtain model parameters
   cv.lasso = cv.glmnet(x, y, alpha = 1, family = "binomial", nfolds = 10, type.measure = "class" )
   lambda.min <- cv.lasso$lambda.min
   lambda.1se <- cv.lasso$lambda.1se
-  print("***lambda.min¡¢lambda.1se***")
+  print("***lambda.minã€lambda.1se***")
   print(lambda.min)
   print(lambda.1se)
   
-  ## ÄâºÏ
+  ## fit
   lasso.model <- glmnet(x, y, alpha = 1, family = "binomial", lambda = cv.lasso$lambda.1se)
   coef <- as.matrix(coef(lasso.model))
-  tcross <- rep(i, length(coef))              # iÊÇµÚ¼¸´ÎÑ­»·½»²æ£¬¹²K´Î
+  tcross <- rep(i, length(coef))                 
   step_lasso <- data.frame(cbind(coef, tcross))
-  coef_lasso <- cbind(coef_lasso, step_lasso)   #temp°´ĞĞºÍpredºÏ²¢
+  coef_lasso <- cbind(coef_lasso, step_lasso)    
   
-  ## Ô¤²â
+  ## predict
   p <- predict(lasso.model, newx = x.test, type = "response")
   kcross <- rep(i, length(p)) 
-  temp_lasso <- data.frame(cbind(y.test, p, kcross)) # ÕæÊµÖµ¡¢Ô¤²âÖµ¡¢Ëæ»úÉ­ÁÖÊ÷Êı¡¢Ô¤²â×é±àºÅÀ¦°óÔÚÒ»Æğ×é³ÉĞÂµÄÊı¾İ¿òtenp
-  pred_lasso <- cbind(pred_lasso,temp_lasso)   #temp°´ĞĞºÍpredºÏ²¢
-
-  print(paste("µÚ£º",i)) 
-}
+  temp_lasso <- data.frame(cbind(y.test, p, kcross))  
+  pred_lasso <- cbind(pred_lasso,temp_lasso)    
   
-## ÉèÖÃ´æ´¢Â·¾¶
+  print(paste("Theï¼š",i)) 
+}
+
+## set save pathway
 # write.csv(coef_lasso, file = "lasso\\coef_lasso.csv")
 # write.csv(pred_lasso, file = "lasso\\pred_lasso.csv")
 
-# ÇóÆ½¾ù
+## average value
 p_lasso <- read.table("lasso\\pred_lasso.csv", header=TRUE, sep = ',')
 pred_lasso <- cbind(y.test,my_pred(p_lasso))
 # write.csv(pred_lasso, file = "lasso\\pred_lasso0.csv")
@@ -285,28 +294,26 @@ pred_lasso <- cbind(y.test,my_pred(p_lasso))
 plot.roc(pred_lasso[,1], pred_lasso[,2], print.auc=T, main="pAUC")
 # dev.off()
 
-## ĞÔÄÜÖ¸±ê
+## Performance index
 predict = ifelse(pred_lasso[,2] > 0.5, 1, 0)
 predict_value = predict 
 true_value = pred_lasso[,1]
 error = predict_value-true_value
 
-# ¼ÆËãÄ£ĞÍ×¼È·ĞÔ£¨accuracy£©¡¢¾«È·¶È£¨Precision£©£¬ÕÙ»ØÂÊ£¨Recall£©-- Ãô¸ĞĞÔ£¨sensitivity£©-- ÕæÑôĞÔÂÊ£¨TPR£©ºÍ F²â¶È£¨F-measure£©ºÍ»ìÏı¾ØÕó
 accuracy = (nrow(data)-sum(abs(error)))/nrow(data) 
-precision = sum(true_value & predict_value)/sum(predict_value)  #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / Ô¤²âÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı/ÌáÈ¡³öµÄĞÅÏ¢ÌõÊı
-recall = sum(predict_value & true_value)/sum(true_value)        #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / ÕæÊµÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı /Ñù±¾ÖĞµÄĞÅÏ¢ÌõÊı
-# PºÍRÖ¸±êÓĞÊ±ºò»á³öÏÖµÄÃ¬¶ÜµÄÇé¿ö£¬ÕâÑù¾ÍĞèÒª×ÛºÏ¿¼ÂÇËûÃÇ£¬×î³£¼ûµÄ·½·¨¾ÍÊÇF-Measure£¨ÓÖ³ÆÎªF-Score£©
-F_measure= 2*precision*recall/(precision+recall)    #F-MeasureÊÇPrecisionºÍRecall¼ÓÈ¨µ÷ºÍÆ½¾ù£¬ÊÇÒ»¸ö×ÛºÏÆÀ¼ÛÖ¸±ê
+precision = sum(true_value & predict_value)/sum(predict_value)   
+recall = sum(predict_value & true_value)/sum(true_value)         
+F_measure= 2*precision*recall/(precision+recall)     
 specificity = ((nrow(data)-sum(abs(error)))-sum(predict_value & true_value))/(nrow(data)-sum(true_value)) 
-# AUC
+## AUC
 pred <- prediction(pred_lasso[,2], pred_lasso[,1])
 auc <- performance(pred,'auc')
 auc <- unlist(slot(auc,'y.values'))
 
-## »ìÏı¾ØÕó£¬ÏÔÊ¾½á¹ûÒÀ´ÎÎªTP¡¢FN¡¢FP¡¢TN
+## Confusion matrix
 # table(true_value, predict_value) %>% as.matrix(table) %>% write.csv(file = "lasso\\table.csv")     
 
-## Êä³ö½á¹û
+## Output results
 i <- 2
 result[i,1] <- accuracy
 result[i,2] <- precision
@@ -316,47 +323,49 @@ result[i,5] <- specificity
 result[i,6] <- auc
 # result %>% write.csv(file = "result\\result.csv") 
 
-######################### glmnet Ä£Äâ Elastic Net ³Í·£ #############################
 
-## ´æ´¢Ô¤²â½á¹û
-coef_elastic <- matrix()       # ´æ´¢ÏµÊı½á¹û
-pred_elastic <- matrix()   # ´æ´¢Ô¤²â½á¹û
+################################################################################
+# glmnet: Elastic Net penalty 
+################################################################################
+## save prediction results
+coef_elastic <- matrix()       # save coefficients
+pred_elastic <- matrix()       # save prediction
 
 for(i in 1:30){
   
-  ## ÉèÖÃÖÖ×Ó
+  ## set seed
   set.seed(i)
   
-  ## ½»²æÑéÖ¤£¬µÃµ½Ä£ĞÍ²ÎÊı
+  ## Cross-validation to obtain model parameters
   cv.elastic = cv.glmnet(x, y, alpha = 0.5, family = "binomial", nfolds = 10, type.measure = "class")
   lambda.min <- cv.elastic$lambda.min
   lambda.1se <- cv.elastic$lambda.1se
-  print("***lambda.min¡¢lambda.1se***")
+  print("***lambda.minã€lambda.1se***")
   print(lambda.min)
   print(lambda.1se)
   
-  ## ÄâºÏ
+  ## fit model
   elastic.model <- glmnet(x, y, alpha = 0.5, family = "binomial", lambda = cv.elastic$lambda.1se)
   coef <- as.matrix(coef(elastic.model))
-  tcross <- rep(i, length(coef))              # iÊÇµÚ¼¸´ÎÑ­»·½»²æ£¬¹²K´Î
+  tcross <- rep(i, length(coef))              
   step_elastic <- data.frame(cbind(coef, tcross))
-  coef_elastic <- cbind(coef_elastic, step_elastic)   #temp°´ĞĞºÍpredºÏ²¢
+  coef_elastic <- cbind(coef_elastic, step_elastic)   
   
-  ## Ô¤²â
+  ## predict
   p <- predict(elastic.model, newx = x.test, type = "response")
   kcross <- rep(i, length(p)) 
   temp_elastic <- data.frame(cbind(y.test, p, kcross))
   
-  pred_elastic <- cbind(pred_elastic,temp_elastic)   #temp°´ĞĞºÍpredºÏ²¢
+  pred_elastic <- cbind(pred_elastic,temp_elastic)   
   
-  print(paste("µÚ£º",i)) 
+  print(paste("Theï¼š",i)) 
 }
-  
-## ÉèÖÃ´æ´¢Â·¾¶
+
+## set save pathway
 # write.csv(coef_elastic, file = "elastic_net\\coef_elastic.csv")
 # write.csv(pred_elastic, file = "elastic_net\\pred_elastic.csv")
 
-# ÇóÆ½¾ù 
+## average value
 p_elastic <- read.table("elastic_net\\pred_elastic.csv", header=TRUE, sep = ',')
 pred_elastic <- cbind(y.test,my_pred(p_elastic))
 # write.csv(pred_elastic, file = "elastic_net\\pred_elastic0.csv")
@@ -366,31 +375,26 @@ pred_elastic <- cbind(y.test,my_pred(p_elastic))
 plot.roc(pred_elastic[,1], pred_elastic[,2], print.auc=T, main="pAUC")
 # dev.off()
 
-## ĞÔÄÜÖ¸±ê
+## Performance index
 predict = ifelse(pred_elastic[,2] > 0.5, 1, 0)
 predict_value = predict 
 true_value = pred_elastic[,1]
 error = predict_value-true_value
 
-# ¼ÆËãÄ£ĞÍ×¼È·ĞÔ£¨accuracy£©¡¢¾«È·¶È£¨Precision£©£¬ÕÙ»ØÂÊ£¨Recall£©-- Ãô¸ĞĞÔ£¨sensitivity£©-- ÕæÑôĞÔÂÊ£¨TPR£©ºÍ F²â¶È£¨F-measure£©ºÍ»ìÏı¾ØÕó
-# Precision¼ÆËãµÄÊÇËùÓĞ±»¼ìË÷µ½µÄitem£¨TP+FP£©ÖĞ,"Ó¦¸Ã±»¼ìË÷µ½µÄitem£¨TP£©¡±Õ¼µÄ±ÈÀı£»
-# Recall¼ÆËãµÄÊÇËùÓĞ¼ìË÷µ½µÄitem£¨TP£©Õ¼ËùÓĞ"Ó¦¸Ã±»¼ìË÷µ½µÄitem£¨TP+FN£©"µÄ±ÈÀı
-# Ò»°ãÀ´Ëµ£¬Precision¾ÍÊÇ¼ìË÷³öÀ´µÄÌõÄ¿£¨±ÈÈç£ºÎÄµµ¡¢ÍøÒ³µÈ£©ÓĞ¶àÉÙÊÇ×¼È·µÄ£¬Recall¾ÍÊÇËùÓĞ×¼È·µÄÌõÄ¿ÓĞ¶àÉÙ±»¼ìË÷³öÀ´ÁË
 accuracy = (nrow(data)-sum(abs(error)))/nrow(data) 
-precision = sum(true_value & predict_value)/sum(predict_value)  #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / Ô¤²âÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı/ÌáÈ¡³öµÄĞÅÏ¢ÌõÊı
-recall = sum(predict_value & true_value)/sum(true_value)        #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / ÕæÊµÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı /Ñù±¾ÖĞµÄĞÅÏ¢ÌõÊı
-# PºÍRÖ¸±êÓĞÊ±ºò»á³öÏÖµÄÃ¬¶ÜµÄÇé¿ö£¬ÕâÑù¾ÍĞèÒª×ÛºÏ¿¼ÂÇËûÃÇ£¬×î³£¼ûµÄ·½·¨¾ÍÊÇF-Measure£¨ÓÖ³ÆÎªF-Score£©
-F_measure= 2*precision*recall/(precision+recall)    #F-MeasureÊÇPrecisionºÍRecall¼ÓÈ¨µ÷ºÍÆ½¾ù£¬ÊÇÒ»¸ö×ÛºÏÆÀ¼ÛÖ¸±ê
+precision = sum(true_value & predict_value)/sum(predict_value)   
+recall = sum(predict_value & true_value)/sum(true_value)         
+F_measure= 2*precision*recall/(precision+recall)     
 specificity = ((nrow(data)-sum(abs(error)))-sum(predict_value & true_value))/(nrow(data)-sum(true_value)) 
-# AUC
+## AUC
 pred <- prediction(pred_elastic[,2], pred_elastic[,1])
 auc <- performance(pred,'auc')
 auc <- unlist(slot(auc,'y.values'))
 
-## »ìÏı¾ØÕó£¬ÏÔÊ¾½á¹ûÒÀ´ÎÎªTP¡¢FN¡¢FP¡¢TN
+## Confusion matrix 
 # table(true_value, predict_value) %>% as.matrix(table) %>% write.csv(file = "elastic_net\\table.csv")     
 
-## Êä³ö½á¹û
+## Output results
 i <- 3
 result[i,1] <- accuracy
 result[i,2] <- precision
@@ -400,51 +404,54 @@ result[i,5] <- specificity
 result[i,6] <- auc
 # result %>% write.csv(file = "result\\result.csv") 
 
-######################### ncpen Ä£Äâ Bridge 1/2 ³Í·£#############################
 
-## ´æ´¢Ô¤²â½á¹û
-coef_Bridge <- matrix()       # ´æ´¢ÏµÊı½á¹û
-pred_Bridge <- matrix()   # ´æ´¢Ô¤²â½á¹û
+################################################################################
+# ncpen: Bridge 1/2 penalty 
+################################################################################
+
+##  save prediction results
+coef_Bridge <- matrix()       # save coefficients
+pred_Bridge <- matrix()   # save prediction
 
 for(i in 1:30){
-
-  ## ÉèÖÃÖÖ×Ó
+  
+  ## set seed
   set.seed(i)
   
-  ## ½»²æÑéÖ¤£¬µÃµ½Ä£ĞÍ²ÎÊı
+  ## Cross-validation to obtain model parameters
   # cv.Bridge <- cv.ncpen(y.vec=y, x.mat=x, family="binomial", penalty="mbridge")
   # plot(cv.Bridge, type = "rmse", log.scale = T)
   # coef(cv.Bridge)$lambda
   
-  ## ÄâºÏ£¬µÃµ½Ä£ĞÍ²ÎÊı
+  ## fit model
   Bridge.model <- ncpen(y.vec = y, x.mat = x, family="binomial", penalty="mbridge")
   opt.lambda <- gic.ncpen(Bridge.model, pch="*", type="b")$opt.lambda
   
   print("*** optional lambda ***")
   print(opt.lambda)
   
-  ## ÌáÈ¡ÏµÊı
+  ## Extract coefficients
   coef <- coef(Bridge.model)
   # coef_Bridge <- as.matrix(coef[, dim(coef)[2]])
   coef <- as.matrix(coef[, dim(coef)[2]])
-  tcross <- rep(i, length(coef))              # iÊÇµÚ¼¸´ÎÑ­»·½»²æ£¬¹²K´Î
+  tcross <- rep(i, length(coef))              
   step_Bridge <- data.frame(cbind(coef, tcross))
-  coef_Bridge <- cbind(coef_Bridge, step_Bridge)   #temp°´ĞĞºÍpredºÏ²¢
-  ## Ô¤²â
+  coef_Bridge <- cbind(coef_Bridge, step_Bridge)   
+  ## predict
   p <- predict(Bridge.model, "prob", new.x.mat = x.test)
   p <- p[,dim(p)[2]]
   kcross <- rep(i, length(p)) 
   temp_Bridge <- data.frame(cbind(y.test, p, kcross))
-  pred_Bridge <- cbind(pred_Bridge,temp_Bridge)   #temp°´ĞĞºÍpredºÏ²¢
+  pred_Bridge <- cbind(pred_Bridge,temp_Bridge)   
   
-  print(paste("µÚ£º",i)) 
+  print(paste("Theï¼š",i)) 
 }
 
 
-## ÉèÖÃ´æ´¢Â·¾¶
+## set save pathway
 # write.csv(coef_Bridge, file = "L0.5\\coef_Bridge.csv")
 # write.csv(pred_Bridge, file = "L0.5\\pred_Bridge.csv")
-# ÇóÆ½¾ù
+## average value
 p_Bridge <- read.table("L0.5\\pred_Bridge.csv", header=TRUE, sep = ',')
 pred_Bridge <- cbind(y.test,my_pred(p_Bridge))
 # write.csv(pred_Bridge, file = "L0.5\\pred_Bridge0.csv")
@@ -454,27 +461,26 @@ pred_Bridge <- cbind(y.test,my_pred(p_Bridge))
 plot.roc(pred_Bridge[,1], pred_Bridge[,2], print.auc=T, main="pAUC")
 # dev.off()
 
-## ĞÔÄÜÖ¸±ê
+## Performance index
 predict = ifelse(pred_Bridge[,2] > 0.5, 1, 0)
 predict_value = predict 
 true_value = pred_Bridge[,1]
 error = predict_value-true_value
 
-# ¼ÆËãÄ£ĞÍ×¼È·ĞÔ£¨accuracy£©¡¢¾«È·¶È£¨Precision£©£¬ÕÙ»ØÂÊ£¨Recall£©-- Ãô¸ĞĞÔ£¨sensitivity£©-- ÕæÑôĞÔÂÊ£¨TPR£©ºÍ F²â¶È£¨F-measure£©ºÍ»ìÏı¾ØÕó
 accuracy = (nrow(data)-sum(abs(error)))/nrow(data) 
-precision = sum(true_value & predict_value)/sum(predict_value)  #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / Ô¤²âÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı/ÌáÈ¡³öµÄĞÅÏ¢ÌõÊı
-recall = sum(predict_value & true_value)/sum(true_value)        #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / ÕæÊµÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı /Ñù±¾ÖĞµÄĞÅÏ¢ÌõÊı
-F_measure= 2*precision*recall/(precision+recall)    #F-MeasureÊÇPrecisionºÍRecall¼ÓÈ¨µ÷ºÍÆ½¾ù£¬ÊÇÒ»¸ö×ÛºÏÆÀ¼ÛÖ¸±ê
+precision = sum(true_value & predict_value)/sum(predict_value) 
+recall = sum(predict_value & true_value)/sum(true_value)       
+F_measure= 2*precision*recall/(precision+recall)    
 specificity = ((nrow(data)-sum(abs(error)))-sum(predict_value & true_value))/(nrow(data)-sum(true_value)) 
-# AUC
+## AUC
 pred <- prediction(pred_Bridge[,2], pred_Bridge[,1])
 auc <- performance(pred,'auc')
 auc <- unlist(slot(auc,'y.values'))
 
-## »ìÏı¾ØÕó£¬ÏÔÊ¾½á¹ûÒÀ´ÎÎªTP¡¢FN¡¢FP¡¢TN
+## Confusion matrix
 # table(true_value, predict_value) %>% as.matrix(table) %>% write.csv(file = "L0.5\\table.csv")     
 
-## Êä³ö½á¹û
+## Output results
 i <- 4
 result[i,1] <- accuracy
 result[i,2] <- precision
@@ -484,52 +490,55 @@ result[i,5] <- specificity
 result[i,6] <- auc
 # result %>% write.csv(file = "result\\result.csv") 
 
-######################### ncvreg Ä£Äâ SCAD ³Í·£ #############################
 
-X <- model.matrix(Lable ~., train.data)[,-1]   # É¾³ıÁËLable~.
-y <- train.data$Lable # y <- ifelse(train.data$Lable == "1", 1, 0)
+################################################################################
+# ncvreg: SCAD penalty  
+################################################################################
+
+X <- model.matrix(Lable ~., train.data)[,-1]   
+y <- train.data$Lable 
 x.test <- model.matrix(Lable ~., test.data)[,-1] 
 y.test <- test.data$Lable
 
 
 library(ncvreg)
 
-## ´æ´¢Ô¤²â½á¹û
-coef_SCAD <- matrix()       # ´æ´¢ÏµÊı½á¹û
-pred_SCAD <- matrix()   # ´æ´¢Ô¤²â½á¹û
+##  save prediction results
+coef_SCAD <- matrix()       # save coefficients
+pred_SCAD <- matrix()       # save prediction
 
 for(i in 1:30){
   
   set.seed(i)
-  ## ½»²æÑéÖ¤£¬µÃµ½Ä£ĞÍ²ÎÊı
+  ## Cross-validation to obtain model parameters
   cv.SCAD <- cv.ncvreg(X, y, family ="binomial", penalty="SCAD") 
   lambda.min <- cv.SCAD$lambda.min 
   
   print("*** lambda.min ***")
   print(lambda.min)
   
-  ## ÄâºÏ
+  ## fit model
   SCAD.model <- ncvreg(X, y, family ="binomial", lambda = cv.SCAD$lambda.min, penalty="SCAD")
   coef <- as.matrix(coef(SCAD.model))
-  tcross <- rep(i, length(coef))              # iÊÇµÚ¼¸´ÎÑ­»·½»²æ£¬¹²K´Î
+  tcross <- rep(i, length(coef))              
   step_SCAD <- data.frame(cbind(coef, tcross))
-  coef_SCAD <- cbind(coef_SCAD, step_SCAD)   #temp°´ĞĞºÍpredºÏ²¢
+  coef_SCAD <- cbind(coef_SCAD, step_SCAD)   
   
-  ## Ô¤²â
+  ## predict
   p <- predict(SCAD.model, x.test, type = "response")
   kcross <- rep(i, length(p)) 
   temp_SCAD <- data.frame(cbind(y.test, p, kcross))
-  pred_SCAD <- cbind(pred_SCAD,temp_SCAD)   #temp°´ĞĞºÍpredºÏ²¢
+  pred_SCAD <- cbind(pred_SCAD,temp_SCAD)   
   
-  print(paste("µÚ£º",i)) 
+  print(paste("Theï¼š",i)) 
   
 }
 
 
-## ´æ´¢ Õû¸öµÄ y.test¡¢p ºÍ ÕÛÊı 
+## Store the entire y.test, p and fold
 # write.csv(coef_SCAD, file = "SCAD\\coef_SCAD.csv")
 # write.csv(pred_SCAD, file = "SCAD\\pred_SCAD.csv")
-# ÇóÆ½¾ù
+## average value
 p_SCAD <- read.table("SCAD\\pred_SCAD.csv", header=TRUE, sep = ',')
 pred_SCAD <- cbind(y.test,my_pred(p_SCAD))
 # write.csv(pred_SCAD, file = "SCAD\\pred_SCAD0.csv")
@@ -544,25 +553,20 @@ predict_value = predict
 true_value = pred_SCAD[,1]
 error = predict_value-true_value
 
-# ¼ÆËãÄ£ĞÍ×¼È·ĞÔ£¨accuracy£©¡¢¾«È·¶È£¨Precision£©£¬ÕÙ»ØÂÊ£¨Recall£©-- Ãô¸ĞĞÔ£¨sensitivity£©-- ÕæÑôĞÔÂÊ£¨TPR£©ºÍ F²â¶È£¨F-measure£©ºÍ»ìÏı¾ØÕó
-# Precision¼ÆËãµÄÊÇËùÓĞ±»¼ìË÷µ½µÄitem£¨TP+FP£©ÖĞ,"Ó¦¸Ã±»¼ìË÷µ½µÄitem£¨TP£©¡±Õ¼µÄ±ÈÀı£»
-# Recall¼ÆËãµÄÊÇËùÓĞ¼ìË÷µ½µÄitem£¨TP£©Õ¼ËùÓĞ"Ó¦¸Ã±»¼ìË÷µ½µÄitem£¨TP+FN£©"µÄ±ÈÀı
-# Ò»°ãÀ´Ëµ£¬Precision¾ÍÊÇ¼ìË÷³öÀ´µÄÌõÄ¿£¨±ÈÈç£ºÎÄµµ¡¢ÍøÒ³µÈ£©ÓĞ¶àÉÙÊÇ×¼È·µÄ£¬Recall¾ÍÊÇËùÓĞ×¼È·µÄÌõÄ¿ÓĞ¶àÉÙ±»¼ìË÷³öÀ´ÁË
 accuracy = (nrow(data)-sum(abs(error)))/nrow(data) 
-precision = sum(true_value & predict_value)/sum(predict_value)  #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / Ô¤²âÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı/ÌáÈ¡³öµÄĞÅÏ¢ÌõÊı
-recall = sum(predict_value & true_value)/sum(true_value)        #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / ÕæÊµÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı /Ñù±¾ÖĞµÄĞÅÏ¢ÌõÊı
-# PºÍRÖ¸±êÓĞÊ±ºò»á³öÏÖµÄÃ¬¶ÜµÄÇé¿ö£¬ÕâÑù¾ÍĞèÒª×ÛºÏ¿¼ÂÇËûÃÇ£¬×î³£¼ûµÄ·½·¨¾ÍÊÇF-Measure£¨ÓÖ³ÆÎªF-Score£©
-F_measure= 2*precision*recall/(precision+recall)    #F-MeasureÊÇPrecisionºÍRecall¼ÓÈ¨µ÷ºÍÆ½¾ù£¬ÊÇÒ»¸ö×ÛºÏÆÀ¼ÛÖ¸±ê
+precision = sum(true_value & predict_value)/sum(predict_value)  
+recall = sum(predict_value & true_value)/sum(true_value)        
+F_measure= 2*precision*recall/(precision+recall)   
 specificity = ((nrow(data)-sum(abs(error)))-sum(predict_value & true_value))/(nrow(data)-sum(true_value)) 
-# AUC
+## AUC
 pred <- prediction(pred_SCAD[,2], pred_SCAD[,1])
 auc <- performance(pred,'auc')
 auc <- unlist(slot(auc,'y.values'))
 
-## »ìÏı¾ØÕó£¬ÏÔÊ¾½á¹ûÒÀ´ÎÎªTP¡¢FN¡¢FP¡¢TN
+## Confusion matrix
 # table(true_value, predict_value) %>% as.matrix(table) %>% write.csv(file = "SCAD\\table.csv")     
 
-## Êä³ö½á¹û
+## Output results
 i <- 6
 result[i,1] <- accuracy
 result[i,2] <- precision
@@ -572,44 +576,47 @@ result[i,5] <- specificity
 result[i,6] <- auc
 result %>% write.csv(file = "result\\result.csv")
 
-######################### ncvreg Ä£Äâ MCP ³Í·£ #############################
+
+################################################################################
+# ncvreg: MCP penalty 
+################################################################################
 
 library(ncvreg)
-## ´æ´¢Ô¤²â½á¹û
-coef_MCP <- matrix()       # ´æ´¢ÏµÊı½á¹û
-pred_MCP <- matrix()   # ´æ´¢Ô¤²â½á¹û
+##  save prediction results
+coef_MCP <- matrix()       # save coefficients
+pred_MCP <- matrix()       # save prediction
 
 for(i in 1:30){
   
-  ## ÉèÖÃÖÖ×Ó
+  ## set seed
   set.seed(i)
-  ## ½»²æÑéÖ¤£¬µÃµ½Ä£ĞÍ²ÎÊı
+  ## Cross-validation to obtain model parameters
   cv.MCP <- cv.ncvreg(X, y, family ="binomial", penalty="MCP") 
   lambda.min <- cv.MCP$lambda.min 
   
   print("*** lambda.min ***")
   print(lambda.min)
   
-  ## ÄâºÏ
+  ## fit model
   MCP.model <- ncvreg(X, y, family ="binomial", lambda = cv.MCP$lambda.min, penalty="MCP")
   coef <- as.matrix(coef(MCP.model))
-  tcross <- rep(i, length(coef))              # iÊÇµÚ¼¸´ÎÑ­»·½»²æ£¬¹²K´Î
+  tcross <- rep(i, length(coef))              
   step_MCP <- data.frame(cbind(coef, tcross))
-  coef_MCP <- cbind(coef_MCP, step_MCP)   #temp°´ĞĞºÍpredºÏ²¢
+  coef_MCP <- cbind(coef_MCP, step_MCP)   
   
-  ## Ô¤²â
+  ## predict
   p <- predict(MCP.model, x.test, type = "response")
   kcross <- rep(i, length(p)) 
-  temp_MCP <- data.frame(cbind(y.test, p, kcross)) # ÕæÊµÖµ¡¢Ô¤²âÖµ¡¢Ëæ»úÉ­ÁÖÊ÷Êı¡¢Ô¤²â×é±àºÅÀ¦°óÔÚÒ»Æğ×é³ÉĞÂµÄÊı¾İ¿òtenp
-  pred_MCP <- cbind(pred_MCP,temp_MCP)   #temp°´ĞĞºÍpredºÏ²¢
+  temp_MCP <- data.frame(cbind(y.test, p, kcross))  
+  pred_MCP <- cbind(pred_MCP,temp_MCP)   
   
-  print(paste("µÚ£º",i)) 
+  print(paste("Theï¼š",i)) 
 }
 
-## ÉèÖÃ´æ´¢Â·¾¶
+## set save pathway
 # write.csv(coef_MCP, file = "MCP\\coef_MCP.csv")
 # write.csv(pred_MCP, file = "MCP\\pred_MCP.csv")
-# ÇóÆ½¾ù 
+## average value
 p_MCP <- read.table("MCP\\pred_MCP.csv", header=TRUE, sep = ',')
 pred_MCP <- cbind(y.test,my_pred(p_MCP))
 # write.csv(pred_MCP, file = "MCP\\pred_MCP0.csv")
@@ -619,31 +626,26 @@ pred_MCP <- cbind(y.test,my_pred(p_MCP))
 plot.roc(pred_MCP[,1], pred_MCP[,2], print.auc=T, main="pAUC")
 # dev.off()
 
-## ĞÔÄÜÖ¸±ê
+## Performance index
 predict = ifelse(pred_MCP[,2] > 0.5, 1, 0)
 predict_value = predict 
 true_value = pred_MCP[,1]
 error = predict_value-true_value
 
-# ¼ÆËãÄ£ĞÍ×¼È·ĞÔ£¨accuracy£©¡¢¾«È·¶È£¨Precision£©£¬ÕÙ»ØÂÊ£¨Recall£©-- Ãô¸ĞĞÔ£¨sensitivity£©-- ÕæÑôĞÔÂÊ£¨TPR£©ºÍ F²â¶È£¨F-measure£©ºÍ»ìÏı¾ØÕó
-# Precision¼ÆËãµÄÊÇËùÓĞ±»¼ìË÷µ½µÄitem£¨TP+FP£©ÖĞ,"Ó¦¸Ã±»¼ìË÷µ½µÄitem£¨TP£©¡±Õ¼µÄ±ÈÀı£»
-# Recall¼ÆËãµÄÊÇËùÓĞ¼ìË÷µ½µÄitem£¨TP£©Õ¼ËùÓĞ"Ó¦¸Ã±»¼ìË÷µ½µÄitem£¨TP+FN£©"µÄ±ÈÀı
-# Ò»°ãÀ´Ëµ£¬Precision¾ÍÊÇ¼ìË÷³öÀ´µÄÌõÄ¿£¨±ÈÈç£ºÎÄµµ¡¢ÍøÒ³µÈ£©ÓĞ¶àÉÙÊÇ×¼È·µÄ£¬Recall¾ÍÊÇËùÓĞ×¼È·µÄÌõÄ¿ÓĞ¶àÉÙ±»¼ìË÷³öÀ´ÁË
 accuracy = (nrow(data)-sum(abs(error)))/nrow(data) 
-precision = sum(true_value & predict_value)/sum(predict_value)  #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / Ô¤²âÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı/ÌáÈ¡³öµÄĞÅÏ¢ÌõÊı
-recall = sum(predict_value & true_value)/sum(true_value)        #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / ÕæÊµÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı /Ñù±¾ÖĞµÄĞÅÏ¢ÌõÊı
-# PºÍRÖ¸±êÓĞÊ±ºò»á³öÏÖµÄÃ¬¶ÜµÄÇé¿ö£¬ÕâÑù¾ÍĞèÒª×ÛºÏ¿¼ÂÇËûÃÇ£¬×î³£¼ûµÄ·½·¨¾ÍÊÇF-Measure£¨ÓÖ³ÆÎªF-Score£©
-F_measure= 2*precision*recall/(precision+recall)    #F-MeasureÊÇPrecisionºÍRecall¼ÓÈ¨µ÷ºÍÆ½¾ù£¬ÊÇÒ»¸ö×ÛºÏÆÀ¼ÛÖ¸±ê
+precision = sum(true_value & predict_value)/sum(predict_value)  
+recall = sum(predict_value & true_value)/sum(true_value)        
+F_measure= 2*precision*recall/(precision+recall)    
 specificity = ((nrow(data)-sum(abs(error)))-sum(predict_value & true_value))/(nrow(data)-sum(true_value)) 
-# AUC
+## AUC
 pred <- prediction(pred_MCP[,2], pred_MCP[,1])
 auc <- performance(pred,'auc')
 auc <- unlist(slot(auc,'y.values'))
 
-## »ìÏı¾ØÕó£¬ÏÔÊ¾½á¹ûÒÀ´ÎÎªTP¡¢FN¡¢FP¡¢TN
+## Confusion matrix
 # table(true_value, predict_value) %>% as.matrix(table) %>% write.csv(file = "MCP\\table.csv")     
 
-## Êä³ö½á¹û
+## Output results
 i <- 7
 result[i,1] <- accuracy
 result[i,2] <- precision
@@ -657,20 +659,24 @@ result[i,6] <- auc
 
 stargazer(result)
 
-###################### l0ara Ä£Äâ Logistic »Ø¹é + L0 ³Í·£ #####################
-##############################################################################
+
+################################################################################
+# l0ara: Logistic regression + L0 penalty  
+################################################################################
+## Construct 'for loop' to get the AUC value predicted by ten-fold cross-validation. 
+## And record the group with the largest value as the optimal training set and test set division.
+
 # install.packages("l0ara")
-## ¹¹½¨forÑ­»·£¬µÃµ½Ê®´Î½»²æÑéÖ¤Ô¤²âµÄAUCÖµ¡£²¢¼ÍÂ¼È¡Öµ×î´óµÄÒ»×é£¬×÷Îª×îÓÅµÄÑµÁ·¼¯Óë²âÊÔ¼¯»®·Ö¡£
 library("l0ara")
 
-coef_L0 <- matrix()   # ´æ´¢ÏµÊı½á¹û
-pred_L0 <- matrix()   # ´æ´¢Ô¤²â½á¹û
+coef_L0 <- matrix()   # save coefficients
+pred_L0 <- matrix()   # save prediction
 
 for(i in 1:30){
   # i <- 1
-  ## ÉèÖÃÖÖ×Ó
+  ## set seed
   set.seed(i)
-  ## ½»²æÑéÖ¤£¬µÃµ½Ä£ĞÍ²ÎÊı
+  ## Cross-validation to obtain model parameters
   # lam <- seq(1,0.05,-0.05)
   lam <- seq(1,0.5,-0.5)
   cv.l0 <- cv.l0ara(x, y, family="logit", lam, measure = "mse")
@@ -679,7 +685,7 @@ for(i in 1:30){
   print("*** lambda.min ***")
   print(lambda.min)
   
-  ## ÄâºÏ
+  ## fit model
   l0.model <- l0ara(x, y, family = "logit", lambda.min)
   coef_l0 <- coef(l0.model)
   coef_l0 = as.matrix(coef_l0)
@@ -693,25 +699,25 @@ for(i in 1:30){
   }
   
   coef <- as.matrix(new_coef_l0)
-  tcross <- rep(i, length(coef))              # iÊÇµÚ¼¸´ÎÑ­»·½»²æ£¬¹²K´Î
+  tcross <- rep(i, length(coef))              
   step_L0 <- data.frame(cbind(coef, tcross))
-  coef_L0 <- cbind(coef_L0, step_L0)   #temp°´ĞĞºÍpredºÏ²¢
+  coef_L0 <- cbind(coef_L0, step_L0)   
   
-  ## Ô¤²â
+  ## predict
   p <- predict(l0.model, newx = x.test, type = "response")
   kcross <- rep(i, length(p)) 
   temp_L0 <- data.frame(cbind(y.test, p, kcross)) 
-  pred_L0 <- cbind(pred_L0,temp_L0)   #temp°´ĞĞºÍpredºÏ²¢
+  pred_L0 <- cbind(pred_L0,temp_L0)   
   
-  print(paste("µÚ£º",i)) 
+  print(paste("Theï¼š",i)) 
 }
 
 
-## ´æ´¢ Õû¸öµÄ y.test¡¢p ºÍ ÕÛÊı
+## Store the entire y.test, p and fold
 # write.csv(coef_L0, file = "L0\\coef_L0.csv")
 # write.csv(pred_L0, file = "L0\\pred_L0.csv")
 
-# ÇóÆ½¾ù 
+## average value
 p_L0 <- read.table("L0\\pred_L0.csv", header=TRUE, sep = ',')
 
 my_pred <- function(x){
@@ -732,28 +738,26 @@ pred_L0 <- cbind(y.test,my_pred(p_L0))
 plot.roc(pred_L0[,1], pred_L0[,2], print.auc=T, main="pAUC")
 # dev.off()
 
-## ĞÔÄÜÖ¸±ê
+## Performance index
 predict = ifelse(pred_L0[,2] > 0.5, 1, 0)
 predict_value = predict
 true_value = pred_L0[,1]
 error = predict_value-true_value
 
-# ¼ÆËãÄ£ĞÍ×¼È·ĞÔ£¨accuracy£©¡¢¾«È·¶È£¨Precision£©£¬ÕÙ»ØÂÊ£¨Recall£©-- Ãô¸ĞĞÔ£¨sensitivity£©-- ÕæÑôĞÔÂÊ£¨TPR£©ºÍ F²â¶È£¨F-measure£©ºÍ»ìÏı¾ØÕó
 accuracy = (nrow(data)-sum(abs(error)))/nrow(data)
-precision = sum(true_value & predict_value)/sum(predict_value)  #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / Ô¤²âÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı/ÌáÈ¡³öµÄĞÅÏ¢ÌõÊı
-recall = sum(predict_value & true_value)/sum(true_value)        #ÕæÊµÖµÔ¤²âÖµÈ«Îª1 / ÕæÊµÖµÈ«Îª1 --- ÌáÈ¡³öµÄÕıÈ·ĞÅÏ¢ÌõÊı /Ñù±¾ÖĞµÄĞÅÏ¢ÌõÊı
-# PºÍRÖ¸±êÓĞÊ±ºò»á³öÏÖµÄÃ¬¶ÜµÄÇé¿ö£¬ÕâÑù¾ÍĞèÒª×ÛºÏ¿¼ÂÇËûÃÇ£¬×î³£¼ûµÄ·½·¨¾ÍÊÇF-Measure£¨ÓÖ³ÆÎªF-Score£©
-F_measure = 2*precision*recall/(precision+recall)    #F-MeasureÊÇPrecisionºÍRecall¼ÓÈ¨µ÷ºÍÆ½¾ù£¬ÊÇÒ»¸ö×ÛºÏÆÀ¼ÛÖ¸±ê
+precision = sum(true_value & predict_value)/sum(predict_value)  
+recall = sum(predict_value & true_value)/sum(true_value)        
+F_measure = 2*precision*recall/(precision+recall)    
 specificity = ((nrow(data)-sum(abs(error)))-sum(predict_value & true_value))/(nrow(data)-sum(true_value))
-# AUC
+## AUC
 pred <- prediction(pred_L0[,2], pred_L0[,1])
 auc <- performance(pred,'auc')
 auc <- unlist(slot(auc,'y.values'))
 
-## »ìÏı¾ØÕó£¬ÏÔÊ¾½á¹ûÒÀ´ÎÎªTP¡¢FN¡¢FP¡¢TN
+## Confusion matrix
 # table(true_value, predict_value) %>% as.matrix(table) %>% write.csv(file = "L0\\table.csv")     
 
-## Êä³ö½á¹û
+## Output results
 i <- 5
 result[i,1] <- accuracy
 result[i,2] <- precision
@@ -764,16 +768,16 @@ result[i,6] <- auc
 # result %>% write.csv(file = "result\\result.csv")
 
 
-
-########################################  »ùÒòºÏ²¢ ###########################################################
-###################################################################################################################
+################################################################################
+# gene integration 
+################################################################################
 
 ## clear
 rm(list = ls())
 
 
-## load data (coef of seven methods)
-setwd("D:\\E\\²©Ê¿\\R_³ÌĞò\\GSE59491_15\\Data37")
+## load data (i.e., the coefficients of above seven methods)
+setwd(".\\GSE59491_15\\Data37")
 Coef_ridge <- read.table("ridge\\coef_ridge.csv", header=TRUE, sep = ',')
 Coef_lasso <- read.table("lasso\\coef_lasso.csv", header=TRUE, sep = ',')
 Coef_Elastic <- read.table("elastic_net\\coef_elastic.csv", header=TRUE, sep = ',')
@@ -783,8 +787,8 @@ Coef_SCAD <- read.table("SCAD\\coef_SCAD.csv", header=TRUE, sep = ',')
 Coef_MCP <- read.table("MCP\\coef_MCP.csv", header=TRUE, sep = ',')
 
 
-## extract coef of 30 runs
-# my_cbind ÌáÈ¡30´ÎµÄcoef -----------------------------------------------------
+## extract coefficients of 30 runs
+## define 'my_cbind' function to extract 30-times coefficients -----------------
 my_cbind <- function(x){
   x1 <- matrix()
   x1 <- as.character(x[,1])
@@ -795,7 +799,7 @@ my_cbind <- function(x){
 }
 
 
-## compute -----------------------------------------------------------------------
+## compute ---------------------------------------------------------------------
 coef_ridge1 <- my_cbind(Coef_ridge)
 coef_lasso1 <- my_cbind(Coef_lasso)
 coef_Elastic1 <- my_cbind(Coef_Elastic) 
@@ -805,8 +809,8 @@ coef_SCAD1 <- my_cbind(Coef_SCAD)
 coef_MCP1 <- my_cbind(Coef_MCP)  
 
 
-## extract genes
-# my_union_coef È¡30´Î·Ç0ÏµÊıµÄ²¢¼¯ --------------------------------------------------
+## extract genes ---------------------------------------------------------------
+## define 'my_union_coef', getunion of 30-times non-zeros coefficients ---------
 my_union_coef <- function(x){
   x1 <- matrix(data=NA)
   j <- 1
@@ -830,7 +834,7 @@ my_union_coef <- function(x){
 }  
 
 
-# Selected gene -----------------------------------------------------------
+## Selected gene ---------------------------------------------------------------
 coef_ridge <- my_union_coef(coef_ridge1)
 coef_lasso <- my_union_coef(coef_lasso1)
 coef_Elastic <- my_union_coef(coef_Elastic1)
@@ -840,8 +844,7 @@ coef_SCAD <- my_union_coef(coef_SCAD1)
 coef_MCP <- my_union_coef(coef_MCP1)
 
 
-# compute 2-2 Overlap -----------------------------------------------------------
-
+## compute 2-2 Overlap ---------------------------------------------------------
 gene_rl <- intersect(coef_ridge, coef_lasso)
 gene_re <- intersect(coef_ridge, coef_Elastic)
 gene_r1 <- intersect(coef_ridge, coef_l0)
@@ -898,7 +901,7 @@ gene_sm <- intersect(coef_SCAD, coef_MCP)
 
 
 
-# compute number of features  --------------------------------------------------------------------
+## compute number of features  -------------------------------------------------
 sum(coef_ridge != 0)
 sum(coef_lasso != 0)
 sum(coef_Elastic != 0)
@@ -908,8 +911,8 @@ sum(coef_SCAD != 0)
 sum(coef_MCP != 0)
 
 
-## save data
-setwd("D:\\E\\²©Ê¿\\R_³ÌĞò\\GSE59491_15\\Data37\\result")
+## save data  ------------------------------------------------------------------
+setwd(".\\GSE59491_15\\Data37\\result")
 # write.csv(coef_ridge, "coef_ridge1.csv")
 # write.csv(coef_lasso, "coef_lasso1.csv")
 # write.csv(coef_Elastic, "coef_Elastic1.csv")
@@ -921,18 +924,19 @@ setwd("D:\\E\\²©Ê¿\\R_³ÌĞò\\GSE59491_15\\Data37\\result")
 ## save biomarlers
 gene <- intersect(intersect(intersect(coef_Bridge, coef_lasso), coef_Elastic), coef_SCAD)
 # write.csv(gene, "gene_overlap_scale20.csv")
-stargazer(gene) #Ê¹ÓÃstargazerÉú³ÉLaTeXÓïÑÔÏÂµÄÃèÊöĞÔÍ³¼Æ±í¸ñ
+stargazer(gene)  # Use stargazer to generate descriptive tables in LaTeX.
 
 
-##################################    »æÖÆ¹«¹²µÄ ROC ÇúÏß    ######################################################
-###################################################################################################################
+################################################################################
+# plot 'ROC curve' of seven methods
+################################################################################
 
 ## clear
 rm(list = ls())
 
 
 ## load data
-setwd("D:\\E\\²©Ê¿\\R_³ÌĞò\\GSE59491_15\\Data37")
+setwd(".\\GSE59491_15\\Data37")
 coef_ridge <- read.table("ridge\\pred_ridge0.csv", header=TRUE, sep = ',')
 coef_lasso <- read.table("lasso\\pred_lasso0.csv", header=TRUE, sep = ',')
 coef_Elastic <- read.table("elastic_net\\pred_elastic0.csv", header=TRUE, sep = ',')
@@ -951,14 +955,15 @@ roc_Bridge <- lines.roc( coef_Bridge[,2], coef_Bridge[,3], col="Green" )
 roc_l0 <- lines.roc( coef_l0[,2], coef_l0[,3], col="Tan" )
 roc_MCP <- lines.roc( coef_MCP[,2], coef_MCP[,3], col="Cyan" )
 roc_ridge <- lines.roc( coef_ridge[,2], coef_ridge[,3], col="Orchid" )  # Purple
-legend("bottomright", legend=c("Elastic Net", "Lasso", "SCAD", "L1/2", "L0", "MCP", "Ridge"), col=c("Salmon", "Aquamarine", "Magenta", "Green", "Tan", "Cyan", "Orchid"), lwd=2)
+legend("bottomright", legend=c("Elastic Net", "Lasso", "SCAD", "L1/2", "L0", "MCP", "Ridge"), 
+       col=c("Salmon", "Aquamarine", "Magenta", "Green", "Tan", "Cyan", "Orchid"), lwd=2)
 # dev.off()
 
 
 ## load data
 bar <- read.table("result\\bar.csv", header=TRUE, sep = ',')
 colnames(bar) <- c("AUC","Penalty")
-bar$AUC <- round(bar$AUC,3)      # ±£ÁôÈıÎ»Ğ¡Êı
+bar$AUC <- round(bar$AUC,3)         # Keep three decimal places
 library(ggplot2)
 # pdf(file = "result\\bar_fig.pdf")
 ggplot(data = bar, aes(x = Penalty, y = AUC, fill = Penalty))+
@@ -967,5 +972,6 @@ ggplot(data = bar, aes(x = Penalty, y = AUC, fill = Penalty))+
 # dev.off()
 
 
-###################################################################################################################
-###################################################################################################################
+################################################################################
+# the end
+################################################################################
